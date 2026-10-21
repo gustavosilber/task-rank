@@ -233,6 +233,7 @@ export function mapWorkspace(
       }
 
       const description = stripHtml(task.description ?? "")
+      const assigneeIdsForTask = assigneeIds(task).filter((id) => namedIds.has(id))
       return {
         id: String(task.id),
         title: task.name?.trim() || `Task ${task.id}`,
@@ -240,15 +241,16 @@ export function mapWorkspace(
         projectId,
         devId,
         pmId,
+        assigneeIds: assigneeIdsForTask,
         status: completed ? ("completed" as const) : ("in_progress" as const),
         startedAt,
         completedAt: completed ? completedAt || startedAt : null,
       }
     })
-    .filter((task): task is Task => task != null)
+    .filter((task) => task != null)
     .sort((a, b) => (b.completedAt ?? b.startedAt).localeCompare(a.completedAt ?? a.startedAt))
 
-  const usedPeople = new Set(tasks.flatMap((task) => [task.devId, task.pmId]))
+  const usedPeople = new Set(tasks.flatMap((task) => [task.devId, task.pmId, ...(task.assigneeIds ?? [])]))
   const refinedPeople = refineRoles(
     people.filter((person) => usedPeople.has(person.id)),
     tasks,

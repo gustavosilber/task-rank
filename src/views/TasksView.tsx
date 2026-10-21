@@ -48,7 +48,7 @@ export function TasksView({
           : workspace.source === "teamwork"
             ? canImpersonate
               ? `${tasks.length} tasks synced from Teamwork. Satisfaction is the PM review of who did the work.`
-              : `Your ${tasks.length} tasks (as Dev or PM). Ratings are saved in the app.`
+              : `Your ${tasks.length} tasks (assigned, Dev, or PM). Ratings are saved in the app.`
             : `${tasks.length} tasks across ${projects.length} projects in one list. Satisfaction is the PM review of who did the work.`}
       </p>
 

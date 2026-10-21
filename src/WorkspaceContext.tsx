@@ -56,7 +56,12 @@ const WorkspaceContext = createContext<WorkspaceContextValue | null>(null)
 function visibleTasksFor(workspace: Workspace, session: TeamworkSession | null): Task[] {
   if (workspace.source !== "teamwork" || !session || session.isSuperUser) return workspace.tasks
   if (!session.personId) return []
-  return workspace.tasks.filter((task) => task.devId === session.personId || task.pmId === session.personId)
+  return workspace.tasks.filter(
+    (task) =>
+      task.devId === session.personId ||
+      task.pmId === session.personId ||
+      (task.assigneeIds ?? []).includes(session.personId),
+  )
 }
 
 function visiblePeopleFor(workspace: Workspace, session: TeamworkSession | null): Person[] {
@@ -70,7 +75,7 @@ function visiblePeopleFor(workspace: Workspace, session: TeamworkSession | null)
 function counterpartPeople(workspace: Workspace, session: TeamworkSession | null, tasks: Task[]): Person[] {
   const people = ensureSessionPerson(workspace.people, session)
   if (workspace.source !== "teamwork" || !session || session.isSuperUser) return people
-  const ids = new Set(tasks.flatMap((task) => [task.devId, task.pmId]))
+  const ids = new Set(tasks.flatMap((task) => [task.devId, task.pmId, ...(task.assigneeIds ?? [])]))
   ids.add(session.personId)
   return people.filter((person) => ids.has(person.id))
 }
@@ -128,7 +133,12 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         const found = workspace.tasks.find((task) => task.id === id)
         if (!found) throw new Error(`Unknown task: ${id}`)
         if (boundSession && !boundSession.isSuperUser && workspace.source === "teamwork") {
-          if (!boundSession.personId || (found.devId !== boundSession.personId && found.pmId !== boundSession.personId)) {
+          if (
+            !boundSession.personId ||
+            (found.devId !== boundSession.personId &&
+              found.pmId !== boundSession.personId &&
+              !(found.assigneeIds ?? []).includes(boundSession.personId))
+          ) {
             throw new Error(`Unknown task: ${id}`)
           }
         }
