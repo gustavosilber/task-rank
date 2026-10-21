@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node"
-import { proxyTeamwork } from "../../server/teamwork-proxy"
+import { proxyTeamwork } from "../_lib/teamwork-proxy"
 
 function headerValue(value: string | string[] | undefined): string {
   return typeof value === "string" ? value : ""

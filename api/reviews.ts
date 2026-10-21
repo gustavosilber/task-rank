@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node"
-import { handleReviewsRequest } from "../server/reviews"
+import { handleReviewsRequest } from "./_lib/reviews"
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const body = typeof req.body === "string" ? req.body : req.body == null ? "" : JSON.stringify(req.body)

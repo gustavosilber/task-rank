@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http"
 import type { Plugin } from "vite"
-import { proxyTeamwork } from "./server/teamwork-proxy"
+import { proxyTeamwork } from "./api/_lib/teamwork-proxy"
 
 function readBody(req: IncomingMessage): Promise<Buffer> {
   return new Promise((resolve, reject) => {

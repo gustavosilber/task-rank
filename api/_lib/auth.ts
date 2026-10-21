@@ -1,5 +1,3 @@
-import { isSuperUserEmail } from "../src/teamwork/types"
-
 export type AuthUser = {
   email: string
   name: string
@@ -21,6 +19,10 @@ export class HttpError extends Error {
     super(message)
     this.status = status
   }
+}
+
+function isSuperUserEmail(email: string): boolean {
+  return email.trim().toLowerCase() === "dev@bestworlddsweb.com"
 }
 
 function googleClientId(): string {

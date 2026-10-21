@@ -1,6 +1,19 @@
-import type { Direction, Review, Scores } from "../src/types"
 import { HttpError, verifyGoogleUser, type AuthUser } from "./auth"
 import { databaseUrl, ensureSchema, sql } from "./db"
+
+type Direction = "pm_to_dev" | "dev_to_pm"
+type Scores = Partial<Record<string, number>>
+
+type Review = {
+  id: string
+  taskId: string
+  direction: Direction
+  raterId: string
+  rateeId: string
+  scores: Scores
+  detail: string
+  createdAt: string
+}
 
 export type ReviewsRequest = {
   method: string
@@ -105,7 +118,7 @@ function parseReview(value: unknown): ReviewInput {
 function parseReviewList(value: unknown): ReviewInput[] {
   if (Array.isArray(value)) return value.map(parseReview)
   if (value && typeof value === "object" && Array.isArray((value as { reviews?: unknown }).reviews)) {
-    return ((value as { reviews: unknown[] }).reviews).map(parseReview)
+    return (value as { reviews: unknown[] }).reviews.map(parseReview)
   }
   return [parseReview(value)]
 }
