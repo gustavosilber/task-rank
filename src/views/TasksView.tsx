@@ -15,10 +15,12 @@ export function TasksView({
   reviews,
   onOpenTask,
   onOpenPerson,
+  onOpenProject,
 }: {
   reviews: Review[]
   onOpenTask: (taskId: string) => void
   onOpenPerson: (personId: string) => void
+  onOpenProject: (projectId: string) => void
 }) {
   const { projects, tasks, workspace, canImpersonate, userId, syncing } = useWorkspace()
   const [projectId, setProjectId] = useState("all")
@@ -113,7 +115,7 @@ export function TasksView({
                     </button>
                   </td>
                   <td>
-                    <ProjectMark projectId={task.projectId} />
+                    <ProjectMark projectId={task.projectId} onOpen={onOpenProject} />
                   </td>
                   <td>
                     <PeopleList personIds={taskDevIds(task)} userId={userId} canImpersonate={canImpersonate} onOpen={onOpenPerson} />

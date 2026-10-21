@@ -369,6 +369,27 @@ textarea {
 
 .metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
 
+.score-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(176px, 1fr));
+  gap: 12px;
+  margin: 0 0 8px;
+}
+
+.score-card {
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+}
+
+.score-card.on { border-color: var(--ink); }
+
+.context-line {
+  margin: -6px 0 16px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
 .metric span { display: block; margin-bottom: 8px; }
 
 .bars { display: grid; gap: 12px; }
@@ -499,11 +520,11 @@ ul.plain li { padding: 10px 0; border-bottom: 1px solid var(--line); }
   .bar { flex-wrap: wrap; padding: 12px 0; }
   .nav { order: 3; }
   .bar-end { margin-left: 0; }
-  .stats, .metrics { grid-template-columns: 1fr 1fr; }
+  .stats, .metrics, .score-cards { grid-template-columns: 1fr 1fr; }
   .review-grid { grid-template-columns: 1fr; }
   .bar-row { grid-template-columns: 1fr; gap: 4px; }
 }
 
 @media (max-width: 560px) {
-  .stats, .metrics { grid-template-columns: 1fr; }
+  .stats, .metrics, .score-cards { grid-template-columns: 1fr; }
 }

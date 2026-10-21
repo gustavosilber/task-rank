@@ -55,14 +55,20 @@ export function StatusBadge({ status }: { status: "in_progress" | "completed" })
   return <span className={`badge ${status}`}>{status === "completed" ? "Completed" : "In progress"}</span>
 }
 
-export function ProjectMark({ projectId }: { projectId: string }) {
+export function ProjectMark({ projectId, onOpen }: { projectId: string; onOpen?: (projectId: string) => void }) {
   const { projectById } = useWorkspace()
   const project = projectById(projectId)
-  return (
+  const mark = (
     <span className="project">
       <span className="dot" style={{ background: project.color }} />
       {project.name}
     </span>
+  )
+  if (!onOpen) return mark
+  return (
+    <button type="button" className="link" onClick={() => onOpen(projectId)}>
+      {mark}
+    </button>
   )
 }
 

@@ -9,7 +9,7 @@ import { TasksView } from "./views/TasksView"
 import { useWorkspace } from "./WorkspaceContext"
 import { clearReviews, DEMO_WORKSPACE, loadReviews } from "./workspace"
 
-type PeopleScreen = { name: "people"; personId: string; period: Period }
+type PeopleScreen = { name: "people"; personId: string; period: Period; projectId: string }
 type Screen = { name: "tasks" } | PeopleScreen | { name: "teamwork" }
 type Route = Screen | { name: "task"; taskId: string; back: Exclude<Screen, { name: "teamwork" }> }
 
@@ -39,6 +39,7 @@ function AppShell() {
     name: "people",
     personId: people[0]?.id ?? "",
     period: "90",
+    projectId: "all",
   })
   const [route, setRoute] = useState<Route>(() =>
     workspace.source === "teamwork" && !workspace.syncedAt ? { name: "teamwork" } : { name: "tasks" },
@@ -130,7 +131,7 @@ function AppShell() {
     useDemo()
     setReviews(loadReviews("demo"))
     setRoute({ name: "tasks" })
-    setPeopleRoute({ name: "people", personId: DEMO_WORKSPACE.people[0].id, period: "90" })
+    setPeopleRoute({ name: "people", personId: DEMO_WORKSPACE.people[0].id, period: "90", projectId: "all" })
   }
 
   if (!session) return <LoginView />
@@ -225,16 +226,19 @@ function AppShell() {
           <TasksView
             reviews={reviews}
             onOpenTask={(taskId) => openTask(taskId, { name: "tasks" })}
-            onOpenPerson={(personId) => goPeople({ name: "people", personId, period: peopleRoute.period })}
+            onOpenPerson={(personId) => goPeople({ ...peopleRoute, personId })}
+            onOpenProject={(projectId) => goPeople({ ...peopleRoute, projectId })}
           />
         )}
         {route.name === "people" && peopleRoute.personId && (
           <SatisfactionView
             personId={route.personId}
             period={route.period}
+            projectId={route.projectId}
             reviews={reviews}
-            onPerson={(personId) => goPeople({ name: "people", personId, period: route.period })}
-            onPeriod={(period) => goPeople({ name: "people", personId: route.personId, period })}
+            onPerson={(personId) => goPeople({ ...route, personId })}
+            onPeriod={(period) => goPeople({ ...route, period })}
+            onProject={(projectId) => goPeople({ ...route, projectId })}
             onOpenTask={(taskId) => openTask(taskId, route)}
           />
         )}
