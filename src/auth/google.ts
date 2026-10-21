@@ -39,8 +39,24 @@ declare global {
 
 const SCRIPT_SRC = "https://accounts.google.com/gsi/client"
 
+let gisCallback: ((response: CredentialResponse) => void) | null = null
+let gisClientId = ""
+
 export function googleClientId(): string {
   return (import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined)?.trim() ?? ""
+}
+
+export function isGoogleCredentialExpired(credential: string | undefined): boolean {
+  if (!credential) return true
+  try {
+    const parts = credential.split(".")
+    if (parts.length < 2) return true
+    const payload = JSON.parse(atob(parts[1].replace(/-/g, "+").replace(/_/g, "/"))) as { exp?: number }
+    if (typeof payload.exp !== "number") return true
+    return payload.exp * 1000 <= Date.now() + 15_000
+  } catch {
+    return true
+  }
 }
 
 function loadGisScript(): Promise<void> {
@@ -48,8 +64,11 @@ function loadGisScript(): Promise<void> {
   const existing = document.querySelector<HTMLScriptElement>(`script[src="${SCRIPT_SRC}"]`)
   if (existing) {
     return new Promise((resolve, reject) => {
-      existing.addEventListener("load", () => resolve(), { once: true })
-      existing.addEventListener("error", () => reject(new Error("Could not load Google Sign-In.")), { once: true })
+      const done = () => resolve()
+      const fail = () => reject(new Error("Could not load Google Sign-In."))
+      existing.addEventListener("load", done, { once: true })
+      existing.addEventListener("error", fail, { once: true })
+      if (window.google?.accounts?.id) done()
     })
   }
   return new Promise((resolve, reject) => {
@@ -102,31 +121,49 @@ export async function renderGoogleButton(
     return () => undefined
   }
 
+  const callback = (response: CredentialResponse) => {
+    try {
+      if (!response.credential) throw new Error("Google did not return a credential.")
+      onProfile(profileFromCredential(response.credential), response.credential)
+    } catch (error) {
+      onError(error instanceof Error ? error.message : "Could not sign in with Google.")
+    }
+  }
+  gisCallback = callback
+
+  if (gisClientId !== clientId) {
+    try {
+      gis.initialize({
+        client_id: clientId,
+        callback: (response) => gisCallback?.(response),
+        auto_select: false,
+        cancel_on_tap_outside: true,
+      })
+      gisClientId = clientId
+    } catch (error) {
+      onError(error instanceof Error && error.message !== "Invalid Value" ? error.message : "Could not start Google Sign-In.")
+      return () => undefined
+    }
+  }
+
+  if (!parent.isConnected) return () => undefined
   parent.innerHTML = ""
-  gis.initialize({
-    client_id: clientId,
-    callback: (response) => {
-      try {
-        if (!response.credential) throw new Error("Google did not return a credential.")
-        onProfile(profileFromCredential(response.credential), response.credential)
-      } catch (error) {
-        onError(error instanceof Error ? error.message : "Could not sign in with Google.")
-      }
-    },
-    auto_select: false,
-    cancel_on_tap_outside: true,
-  })
-  gis.renderButton(parent, {
-    theme: "outline",
-    size: "large",
-    text: "signin_with",
-    shape: "rectangular",
-    width: 320,
-    locale: "en",
-  })
+  try {
+    gis.renderButton(parent, {
+      theme: "outline",
+      size: "large",
+      text: "signin_with",
+      shape: "rectangular",
+      width: 320,
+      locale: "en",
+    })
+  } catch (error) {
+    onError(error instanceof Error ? error.message : "Could not render Google Sign-In.")
+  }
 
   return () => {
-    parent.innerHTML = ""
+    if (gisCallback === callback) gisCallback = null
+    if (parent.isConnected) parent.innerHTML = ""
   }
 }
 

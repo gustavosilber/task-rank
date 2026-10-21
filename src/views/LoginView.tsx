@@ -6,8 +6,12 @@ import { sessionFromGoogle } from "../workspace"
 export function LoginView() {
   const { workspace, people, setSession, useDemo } = useWorkspace()
   const buttonRef = useRef<HTMLDivElement>(null)
+  const peopleRef = useRef(people)
+  const workspacePeopleRef = useRef(workspace.people)
   const [error, setError] = useState<string | null>(null)
   const clientId = googleClientId()
+  peopleRef.current = people
+  workspacePeopleRef.current = workspace.people
 
   useEffect(() => {
     const parent = buttonRef.current
@@ -18,7 +22,8 @@ export function LoginView() {
       parent,
       (profile, credential) => {
         if (!active) return
-        setSession(sessionFromGoogle(profile, people.length ? people : workspace.people, credential))
+        const list = peopleRef.current.length ? peopleRef.current : workspacePeopleRef.current
+        setSession(sessionFromGoogle(profile, list, credential))
       },
       (message) => {
         if (active) setError(message)
@@ -31,7 +36,7 @@ export function LoginView() {
       active = false
       dispose()
     }
-  }, [clientId, people, setSession, workspace.people])
+  }, [clientId, setSession])
 
   return (
     <div className="login-screen">

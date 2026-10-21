@@ -19,11 +19,11 @@ import {
   saveWorkspace,
   type Workspace,
 } from "./workspace"
-import { signOutGoogle } from "./auth/google"
-import { fetchReviews, upsertReviews } from "./reviews/client"
+import { isGoogleCredentialExpired, signOutGoogle } from "./auth/google"
+import { fetchReviews, ReviewsApiError, upsertReviews } from "./reviews/client"
 import type { Person, Project, Review, Task } from "./types"
 import type { TeamworkConnection, TeamworkSession } from "./teamwork/types"
-import { fetchWorkspaceSnapshot } from "./teamwork/snapshot"
+import { fetchWorkspaceSnapshot, SnapshotApiError } from "./teamwork/snapshot"
 
 type WorkspaceContextValue = {
   workspace: Workspace
@@ -237,9 +237,19 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   }, [workspace, connection, session, reviews, userId, syncing, syncError, ratingsError])
 
   useEffect(() => {
+    if (!session || session.provider !== "google") return
+    if (!isGoogleCredentialExpired(session.googleCredential)) return
+    signOutGoogle(session.email)
+    setSessionState(null)
+    saveSession(null)
+    autoSyncedFor.current = ""
+  }, [session])
+
+  useEffect(() => {
     if (!session || session.email === "demo@taskrank.local") return
     const credential = session.googleCredential
     if (!credential) return
+    if (isGoogleCredentialExpired(credential)) return
     const key = `${session.email}:snapshot`
     if (autoSyncedFor.current === key) return
     autoSyncedFor.current = key
@@ -278,10 +288,15 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         }
       })
       .catch((error) => {
-        if (!cancelled) {
-          autoSyncedFor.current = ""
-          setSyncError(error instanceof Error ? error.message : "Could not load the Teamwork snapshot.")
+        if (cancelled) return
+        autoSyncedFor.current = ""
+        if (error instanceof SnapshotApiError && error.status === 401) {
+          signOutGoogle(session.email)
+          setSessionState(null)
+          saveSession(null)
+          return
         }
+        setSyncError(error instanceof Error ? error.message : "Could not load the Teamwork snapshot.")
       })
       .finally(() => {
         if (!cancelled) setSyncing(false)
@@ -299,6 +314,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     }
     const credential = session?.googleCredential
     if (!credential || !session) return
+    if (isGoogleCredentialExpired(credential)) return
 
     let cancelled = false
     setRatingsError(null)
@@ -347,7 +363,14 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         saveReviews(next)
       })
       .catch((error) => {
-        if (!cancelled) setRatingsError(error instanceof Error ? error.message : "Could not load saved ratings.")
+        if (cancelled) return
+        if (error instanceof ReviewsApiError && error.status === 401) {
+          signOutGoogle(session.email)
+          setSessionState(null)
+          saveSession(null)
+          return
+        }
+        setRatingsError(error instanceof Error ? error.message : "Could not load saved ratings.")
       })
 
     return () => {

@@ -206,7 +206,7 @@ async function verifyGoogleUser(authorization: string): Promise<AuthUser> {
     error_description?: string
   }
   if (!response.ok || payload.error || !payload.email) {
-    throw new HttpError(401, payload.error_description || payload.error || "Google session expired. Sign in again.")
+    throw new HttpError(401, "Google session expired. Sign in again.")
   }
   const clientId = process.env.GOOGLE_CLIENT_ID?.trim() || process.env.VITE_GOOGLE_CLIENT_ID?.trim() || ""
   if (clientId && payload.aud !== clientId) throw new HttpError(401, "Google token does not match this app.")

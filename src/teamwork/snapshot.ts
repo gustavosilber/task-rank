@@ -18,14 +18,26 @@ export type WorkspaceSnapshot = {
   running: boolean
 }
 
+function authErrorMessage(status: number, raw?: string): string | null {
+  if (status !== 401) return null
+  const text = (raw ?? "").trim()
+  if (!text || /invalid value|invalid_token|invalid token|unauthenticated|unauthorized/i.test(text)) {
+    return "Google session expired. Sign in again."
+  }
+  return text
+}
+
 async function parseError(response: Response): Promise<string> {
+  let raw: string | undefined
   try {
     const payload = (await response.json()) as { error?: string }
-    if (payload.error) return payload.error
+    raw = payload.error
   } catch {
     // ignore
   }
-  if (response.status === 401) return "Google session expired. Sign in again."
+  const auth = authErrorMessage(response.status, raw)
+  if (auth) return auth
+  if (raw) return raw
   if (response.status === 404) return "The Teamwork snapshot API is not available on this deploy yet."
   if (response.status === 409) return "A Teamwork sync is already running."
   if (response.status === 503) return "The Teamwork snapshot database is not configured yet."

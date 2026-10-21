@@ -14,13 +14,21 @@ export type ReviewPayload = Review & {
 }
 
 async function parseError(response: Response): Promise<string> {
+  let raw: string | undefined
   try {
     const payload = (await response.json()) as { error?: string }
-    if (payload.error) return payload.error
+    raw = payload.error
   } catch {
     // ignore
   }
-  if (response.status === 401) return "Google session expired. Sign in again."
+  if (response.status === 401) {
+    const text = (raw ?? "").trim()
+    if (!text || /invalid value|invalid_token|invalid token|unauthenticated|unauthorized/i.test(text)) {
+      return "Google session expired. Sign in again."
+    }
+    return text
+  }
+  if (raw) return raw
   if (response.status === 503) return "Ratings database is not configured yet."
   return "Could not reach the ratings database."
 }
