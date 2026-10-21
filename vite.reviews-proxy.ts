@@ -1,7 +1,8 @@
 import type { IncomingMessage, ServerResponse } from "node:http"
 import { loadEnv, type Plugin } from "vite"
 import { handleReviewsRequest } from "./api/reviews"
-import { handleSyncRequest, handleWorkspaceRequest } from "./api/sync"
+import { handleSyncRequest } from "./api/sync"
+import { handleWorkspaceRequest } from "./api/workspace"
 
 function readBody(req: IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -47,7 +48,7 @@ export function reviewsProxyPlugin(): Plugin {
         if (url === "/api/reviews") {
           result = await handleReviewsRequest({ method, authorization, body })
         } else if (url === "/api/workspace") {
-          result = await handleWorkspaceRequest({ method, authorization, cron: false, body: "" })
+          result = await handleWorkspaceRequest({ method, authorization })
         } else if (url === "/api/sync") {
           result = await handleSyncRequest({ method, authorization, cron: false, body })
         }

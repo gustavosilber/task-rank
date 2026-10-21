@@ -26,6 +26,7 @@ async function parseError(response: Response): Promise<string> {
     // ignore
   }
   if (response.status === 401) return "Google session expired. Sign in again."
+  if (response.status === 404) return "The Teamwork snapshot API is not available on this deploy yet."
   if (response.status === 409) return "A Teamwork sync is already running."
   if (response.status === 503) return "The Teamwork snapshot database is not configured yet."
   return "Could not reach the Teamwork snapshot."
