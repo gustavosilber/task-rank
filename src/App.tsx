@@ -85,7 +85,11 @@ function AppShell() {
   async function saveReview(review: Review): Promise<SaveReviewResult> {
     const apply = (saved: Review) => {
       setReviews((current) => [
-        ...current.filter((item) => item.id !== saved.id && !(item.taskId === saved.taskId && item.direction === saved.direction)),
+        ...current.filter(
+          (item) =>
+            item.id !== saved.id &&
+            !(item.taskId === saved.taskId && item.direction === saved.direction && item.raterId === saved.raterId && item.rateeId === saved.rateeId),
+        ),
         saved,
       ])
     }

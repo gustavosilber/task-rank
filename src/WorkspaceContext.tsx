@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import { SEED_REVIEWS } from "./data"
+import { isOnTask, taskDevIds, taskPmIds } from "./model"
 import {
   DEMO_WORKSPACE,
   EMPTY_TEAMWORK_WORKSPACE,
@@ -56,12 +57,7 @@ const WorkspaceContext = createContext<WorkspaceContextValue | null>(null)
 function visibleTasksFor(workspace: Workspace, session: TeamworkSession | null): Task[] {
   if (workspace.source !== "teamwork" || !session || session.isSuperUser) return workspace.tasks
   if (!session.personId) return []
-  return workspace.tasks.filter(
-    (task) =>
-      task.devId === session.personId ||
-      task.pmId === session.personId ||
-      (task.assigneeIds ?? []).includes(session.personId),
-  )
+  return workspace.tasks.filter((task) => isOnTask(task, session.personId))
 }
 
 function visiblePeopleFor(workspace: Workspace, session: TeamworkSession | null): Person[] {
@@ -75,7 +71,7 @@ function visiblePeopleFor(workspace: Workspace, session: TeamworkSession | null)
 function counterpartPeople(workspace: Workspace, session: TeamworkSession | null, tasks: Task[]): Person[] {
   const people = ensureSessionPerson(workspace.people, session)
   if (workspace.source !== "teamwork" || !session || session.isSuperUser) return people
-  const ids = new Set(tasks.flatMap((task) => [task.devId, task.pmId, ...(task.assigneeIds ?? [])]))
+  const ids = new Set(tasks.flatMap((task) => [...taskDevIds(task), ...taskPmIds(task), ...(task.assigneeIds ?? [])]))
   ids.add(session.personId)
   return people.filter((person) => ids.has(person.id))
 }
@@ -133,12 +129,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         const found = workspace.tasks.find((task) => task.id === id)
         if (!found) throw new Error(`Unknown task: ${id}`)
         if (boundSession && !boundSession.isSuperUser && workspace.source === "teamwork") {
-          if (
-            !boundSession.personId ||
-            (found.devId !== boundSession.personId &&
-              found.pmId !== boundSession.personId &&
-              !(found.assigneeIds ?? []).includes(boundSession.personId))
-          ) {
+          if (!boundSession.personId || !isOnTask(found, boundSession.personId)) {
             throw new Error(`Unknown task: ${id}`)
           }
         }
@@ -310,7 +301,14 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         if (cancelled) return
         const local = loadReviews("teamwork")
         const missing = local.filter(
-          (review) => !remote.some((item) => item.taskId === review.taskId && item.direction === review.direction),
+          (review) =>
+            !remote.some(
+              (item) =>
+                item.taskId === review.taskId &&
+                item.direction === review.direction &&
+                item.raterId === review.raterId &&
+                item.rateeId === review.rateeId,
+            ),
         )
         const importKey = `${session.email}:${missing.length}`
         let next = remote
@@ -328,7 +326,14 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
           next = [
             ...remote,
             ...imported.filter(
-              (review) => !remote.some((item) => item.taskId === review.taskId && item.direction === review.direction),
+              (review) =>
+                !remote.some(
+                  (item) =>
+                    item.taskId === review.taskId &&
+                    item.direction === review.direction &&
+                    item.raterId === review.raterId &&
+                    item.rateeId === review.rateeId,
+                ),
             ),
           ]
         }

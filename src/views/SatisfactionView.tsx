@@ -8,9 +8,10 @@ import {
   periodBounds,
   personTasksInPeriod,
   referenceToday,
+  meanOfReviews,
   reviewAverage,
-  reviewFor,
   reviewMean,
+  reviewsFor,
   tone,
 } from "../model"
 import type { Period, Review } from "../types"
@@ -71,8 +72,8 @@ export function SatisfactionView({
       <h1>Satisfaction</h1>
       <p className="lede">
         {canImpersonate
-          ? "All reviews in the period where that person rated or was rated (PM ↔ Dev), including in-progress tasks."
-          : "Your reviews in the period: ones you gave and ones you received (PM ↔ Dev), including in-progress tasks."}
+          ? "All reviews in the period where that person rated or was rated. A task with several Devs or PMs contributes every pair."
+          : "Your reviews in the period: ones you gave and ones you received. A task with several Devs or PMs contributes every pair."}
       </p>
 
       {canImpersonate ? (
@@ -204,8 +205,8 @@ export function SatisfactionView({
               </thead>
               <tbody>
                 {tasks.map((task) => {
-                  const pmToDev = reviewFor(reviews, task.id, "pm_to_dev")
-                  const devToPm = reviewFor(reviews, task.id, "dev_to_pm")
+                  const pmToDev = meanOfReviews(reviewsFor(reviews, task.id, "pm_to_dev"))
+                  const devToPm = meanOfReviews(reviewsFor(reviews, task.id, "dev_to_pm"))
                   return (
                     <tr key={task.id}>
                       <td>
@@ -222,10 +223,10 @@ export function SatisfactionView({
                           : `In progress · ${formatDate(task.startedAt)}`}
                       </td>
                       <td>
-                        {pmToDev ? <ScoreValue value={reviewMean(pmToDev)} /> : <span className="muted">—</span>}
+                        {pmToDev == null ? <span className="muted">—</span> : <ScoreValue value={pmToDev} />}
                       </td>
                       <td>
-                        {devToPm ? <ScoreValue value={reviewMean(devToPm)} /> : <span className="muted">—</span>}
+                        {devToPm == null ? <span className="muted">—</span> : <ScoreValue value={devToPm} />}
                       </td>
                     </tr>
                   )

@@ -58,29 +58,85 @@ export function referenceToday(source: "demo" | "teamwork"): Date {
   return source === "demo" ? DEMO_TODAY : new Date()
 }
 
+export function uniqueIds(ids: Array<string | undefined | null>): string[] {
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const id of ids) {
+    if (!id || seen.has(id)) continue
+    seen.add(id)
+    out.push(id)
+  }
+  return out
+}
+
+export function taskDevIds(task: Task): string[] {
+  return uniqueIds(task.devIds?.length ? task.devIds : [task.devId])
+}
+
+export function taskPmIds(task: Task): string[] {
+  return uniqueIds(task.pmIds?.length ? task.pmIds : [task.pmId])
+}
+
+export function isTaskDev(task: Task, personId: string): boolean {
+  return taskDevIds(task).includes(personId)
+}
+
+export function isTaskPm(task: Task, personId: string): boolean {
+  return taskPmIds(task).includes(personId)
+}
+
+export function isOnTask(task: Task, personId: string): boolean {
+  return isTaskDev(task, personId) || isTaskPm(task, personId) || (task.assigneeIds ?? []).includes(personId)
+}
+
+export function reviewKey(taskId: string, direction: Review["direction"], raterId: string, rateeId: string): string {
+  return `${taskId}:${direction}:${raterId}:${rateeId}`
+}
+
+export type ReviewSlot = {
+  direction: Review["direction"]
+  raterId: string
+  rateeId: string
+}
+
+export function reviewSlotsForTask(task: Task): ReviewSlot[] {
+  const slots: ReviewSlot[] = []
+  for (const pmId of taskPmIds(task)) {
+    for (const devId of taskDevIds(task)) {
+      if (pmId === devId) continue
+      slots.push({ direction: "pm_to_dev", raterId: pmId, rateeId: devId })
+      slots.push({ direction: "dev_to_pm", raterId: devId, rateeId: pmId })
+    }
+  }
+  return slots
+}
+
+export function expectedSlotsForPerson(task: Task, personId: string): ReviewSlot[] {
+  return reviewSlotsForTask(task).filter((slot) => slot.raterId === personId)
+}
+
 export function availableLenses(tasks: Task[], personId: string): Lens[] {
   const lenses: Lens[] = []
-  if (tasks.some((task) => task.devId === personId)) lenses.push("dev")
-  if (tasks.some((task) => task.pmId === personId)) lenses.push("pm")
+  if (tasks.some((task) => isTaskDev(task, personId))) lenses.push("dev")
+  if (tasks.some((task) => isTaskPm(task, personId))) lenses.push("pm")
   return lenses
 }
 
 export function tasksInPeriod(tasks: Task[], personId: string, lens: Lens, start: string, end: string): Task[] {
   return tasks
     .filter((task) => {
-      const ownerId = lens === "dev" ? task.devId : task.pmId
-      if (ownerId !== personId) return false
+      if (lens === "dev" ? !isTaskDev(task, personId) : !isTaskPm(task, personId)) return false
       const anchor = task.completedAt ?? task.startedAt
       return anchor >= start && anchor <= end
     })
     .sort((a, b) => (b.completedAt ?? b.startedAt).localeCompare(a.completedAt ?? a.startedAt))
 }
 
-/** Tasks where the person is Dev or PM, anchored to the period by close or start date. */
+/** Tasks where the person is Dev, PM, or assignee, anchored to the period by close or start date. */
 export function personTasksInPeriod(tasks: Task[], personId: string, start: string, end: string): Task[] {
   return tasks
     .filter((task) => {
-      if (task.devId !== personId && task.pmId !== personId) return false
+      if (!isOnTask(task, personId)) return false
       const anchor = task.completedAt ?? task.startedAt
       return anchor >= start && anchor <= end
     })
@@ -89,12 +145,28 @@ export function personTasksInPeriod(tasks: Task[], personId: string, start: stri
 
 export function activeTasks(tasks: Task[], personId: string, lens: Lens): Task[] {
   return tasks
-    .filter((task) => (lens === "dev" ? task.devId : task.pmId) === personId && task.status === "in_progress")
+    .filter((task) => (lens === "dev" ? isTaskDev(task, personId) : isTaskPm(task, personId)) && task.status === "in_progress")
     .sort((a, b) => b.startedAt.localeCompare(a.startedAt))
 }
 
-export function reviewFor(reviews: Review[], taskId: string, direction: Review["direction"]): Review | undefined {
-  return reviews.find((review) => review.taskId === taskId && review.direction === direction)
+export function reviewFor(
+  reviews: Review[],
+  taskId: string,
+  direction: Review["direction"],
+  raterId?: string,
+  rateeId?: string,
+): Review | undefined {
+  return reviews.find(
+    (review) =>
+      review.taskId === taskId &&
+      review.direction === direction &&
+      (!raterId || review.raterId === raterId) &&
+      (!rateeId || review.rateeId === rateeId),
+  )
+}
+
+export function reviewsFor(reviews: Review[], taskId: string, direction: Review["direction"]): Review[] {
+  return reviews.filter((review) => review.taskId === taskId && review.direction === direction)
 }
 
 export function reviewAverage(review: Review, aspects: Aspect[]): number | null {
@@ -103,6 +175,22 @@ export function reviewAverage(review: Review, aspects: Aspect[]): number | null 
 
 export function reviewMean(review: Review): number | null {
   return reviewAverage(review, aspectsFor(review.direction))
+}
+
+export function meanOfReviews(reviews: Review[]): number | null {
+  return average(reviews.map(reviewMean).filter((value): value is number => typeof value === "number"))
+}
+
+export function personHasUnratedWork(task: Task, personId: string, reviews: Review[]): boolean {
+  const expected = expectedSlotsForPerson(task, personId)
+  if (expected.length === 0) return false
+  return expected.some((slot) => !reviewFor(reviews, task.id, slot.direction, slot.raterId, slot.rateeId))
+}
+
+export function taskHasUnratedSlots(task: Task, reviews: Review[]): boolean {
+  const slots = reviewSlotsForTask(task)
+  if (slots.length === 0) return false
+  return slots.some((slot) => !reviewFor(reviews, task.id, slot.direction, slot.raterId, slot.rateeId))
 }
 
 export function receivedReviews(reviews: Review[], tasks: Task[], personId: string, lens: Lens): Review[] {

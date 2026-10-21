@@ -30,7 +30,8 @@ export type Task = {
   projectId: string
   devId: string
   pmId: string
-  /** Teamwork assignees. Visibility uses this; Dev for ratings is still `devId`. */
+  devIds?: string[]
+  pmIds?: string[]
   assigneeIds?: string[]
   status: TaskStatus
   startedAt: string

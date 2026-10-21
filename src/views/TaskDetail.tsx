@@ -1,8 +1,8 @@
 import { useState } from "react"
 import { aspectsFor } from "../aspects"
-import { formatDate, iso, reviewAverage, reviewFor } from "../model"
+import { formatDate, iso, reviewAverage, reviewFor, reviewKey, reviewSlotsForTask, taskDevIds, taskPmIds } from "../model"
 import type { Aspect, AspectId, Direction, Review, SaveReviewResult, Scores } from "../types"
-import { ProjectMark, ScoreValue, Stars, StatusBadge } from "../ui"
+import { PeopleList, ProjectMark, ScoreValue, Stars, StatusBadge } from "../ui"
 import { useWorkspace } from "../WorkspaceContext"
 
 function completeScores(aspects: Aspect[], scores: Scores): Record<AspectId, number> | null {
@@ -16,6 +16,7 @@ function completeScores(aspects: Aspect[], scores: Scores): Record<AspectId, num
 }
 
 function ReviewForm({
+  formId,
   direction,
   initialScores,
   initialDetail,
@@ -23,6 +24,7 @@ function ReviewForm({
   pending,
   onSubmit,
 }: {
+  formId: string
   direction: Direction
   initialScores?: Scores
   initialDetail?: string
@@ -36,6 +38,7 @@ function ReviewForm({
   const readyScores = completeScores(aspects, scores)
   const detailReady = detail.trim().length >= 8
   const hint = !readyScores ? "Pick a score for each aspect." : !detailReady ? "Describe in one sentence how the task went." : ""
+  const hintId = `hint-${formId}`
 
   return (
     <form
@@ -52,11 +55,11 @@ function ReviewForm({
           <Stars value={scores[aspect.id] ?? 0} onChange={(value) => setScores((current) => ({ ...current, [aspect.id]: value }))} />
         </div>
       ))}
-      <label className="detail-label" htmlFor={`detail-${direction}`}>
+      <label className="detail-label" htmlFor={`detail-${formId}`}>
         Detail
       </label>
       <textarea
-        id={`detail-${direction}`}
+        id={`detail-${formId}`}
         value={detail}
         onChange={(event) => setDetail(event.target.value)}
         placeholder={
@@ -67,11 +70,11 @@ function ReviewForm({
       />
       <div className="form-actions">
         {hint && (
-          <p className="hint" id={`hint-${direction}`}>
+          <p className="hint" id={hintId}>
             {hint}
           </p>
         )}
-        <button type="submit" className="primary" disabled={!readyScores || !detailReady || pending} aria-describedby={hint ? `hint-${direction}` : undefined}>
+        <button type="submit" className="primary" disabled={!readyScores || !detailReady || pending} aria-describedby={hint ? hintId : undefined}>
           {pending ? "Saving…" : submitLabel}
         </button>
       </div>
@@ -82,12 +85,16 @@ function ReviewForm({
 function ReviewSlot({
   taskId,
   direction,
+  raterId,
+  rateeId,
   userId,
   review,
   onSave,
 }: {
   taskId: string
   direction: Direction
+  raterId: string
+  rateeId: string
   userId: string
   review?: Review
   onSave: (review: Review) => Promise<SaveReviewResult | void> | SaveReviewResult | void
@@ -95,10 +102,9 @@ function ReviewSlot({
   const { personById, taskById } = useWorkspace()
   const task = taskById(taskId)
   const aspects = aspectsFor(direction)
-  const raterId = direction === "pm_to_dev" ? task.pmId : task.devId
-  const rateeId = direction === "pm_to_dev" ? task.devId : task.pmId
   const rater = personById(raterId)
   const ratee = personById(rateeId)
+  const slotId = reviewKey(task.id, direction, raterId, rateeId)
   const [editing, setEditing] = useState(false)
   const [saveStatus, setSaveStatus] = useState<"idle" | "local" | "saved">("idle")
   const [pending, setPending] = useState(false)
@@ -113,7 +119,7 @@ function ReviewSlot({
     setSaveStatus("idle")
     try {
       const result = await onSave({
-        id: `${task.id}:${direction}`,
+        id: slotId,
         taskId: task.id,
         direction,
         raterId,
@@ -150,6 +156,7 @@ function ReviewSlot({
 
       {showForm ? (
         <ReviewForm
+          formId={slotId}
           direction={direction}
           initialScores={review?.scores}
           initialDetail={review?.detail}
@@ -198,10 +205,9 @@ export function TaskDetail({
   onBack: () => void
   onSave: (review: Review) => Promise<SaveReviewResult | void> | SaveReviewResult | void
 }) {
-  const { personById, taskById, workspace } = useWorkspace()
+  const { taskById, workspace, canImpersonate } = useWorkspace()
   const task = taskById(taskId)
-  const dev = personById(task.devId)
-  const pm = personById(task.pmId)
+  const slots = [...reviewSlotsForTask(task)].sort((a, b) => Number(b.raterId === userId) - Number(a.raterId === userId))
 
   return (
     <section>
@@ -221,12 +227,16 @@ export function TaskDetail({
           </dd>
         </div>
         <div>
-          <dt>Dev</dt>
-          <dd>{dev.name}</dd>
+          <dt>Devs</dt>
+          <dd>
+            <PeopleList personIds={taskDevIds(task)} userId={userId} canImpersonate={canImpersonate} />
+          </dd>
         </div>
         <div>
-          <dt>PM</dt>
-          <dd>{pm.name}</dd>
+          <dt>PMs</dt>
+          <dd>
+            <PeopleList personIds={taskPmIds(task)} userId={userId} canImpersonate={canImpersonate} />
+          </dd>
         </div>
         <div>
           <dt>Started</dt>
@@ -241,13 +251,24 @@ export function TaskDetail({
       <h2>Reviews</h2>
       <p className="lede">
         {workspace.source === "teamwork"
-          ? "You can rate even while the task is still in progress. Ratings are saved in Task Rank, not in Teamwork."
-          : "PM and Dev can rate each other at any time, including while the task is in progress."}
+          ? "Every assigned Dev and PM can rate the others. Ratings are saved in Task Rank, not in Teamwork."
+          : "Every Dev and PM on the task can rate the others, including while the task is in progress."}
       </p>
       <div className="review-grid">
-        <ReviewSlot taskId={task.id} direction="pm_to_dev" userId={userId} review={reviewFor(reviews, task.id, "pm_to_dev")} onSave={onSave} />
-        <ReviewSlot taskId={task.id} direction="dev_to_pm" userId={userId} review={reviewFor(reviews, task.id, "dev_to_pm")} onSave={onSave} />
+        {slots.map((slot) => (
+          <ReviewSlot
+            key={reviewKey(task.id, slot.direction, slot.raterId, slot.rateeId)}
+            taskId={task.id}
+            direction={slot.direction}
+            raterId={slot.raterId}
+            rateeId={slot.rateeId}
+            userId={userId}
+            review={reviewFor(reviews, task.id, slot.direction, slot.raterId, slot.rateeId)}
+            onSave={onSave}
+          />
+        ))}
       </div>
+      {slots.length === 0 && <p className="empty-row">This task needs at least one Dev and one PM to open review slots.</p>}
     </section>
   )
 }

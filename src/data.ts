@@ -319,6 +319,19 @@ const SEED: SeedTask[] = [
       },
     ],
   },
+  {
+    id: "sitio-octubre",
+    title: "Launch the October marketing site",
+    summary: "Two developers share the WordPress build while the PM tracks go-live.",
+    projectId: "portal",
+    devId: "lucia",
+    pmId: "ana",
+    devIds: ["lucia", "diego"],
+    pmIds: ["ana"],
+    status: "in_progress",
+    startedAt: "2026-10-10",
+    completedAt: null,
+  },
 ]
 
 function toTask(item: SeedTask): Task {
@@ -329,6 +342,9 @@ function toTask(item: SeedTask): Task {
     projectId: item.projectId,
     devId: item.devId,
     pmId: item.pmId,
+    devIds: item.devIds?.length ? item.devIds : [item.devId],
+    pmIds: item.pmIds?.length ? item.pmIds : [item.pmId],
+    assigneeIds: item.assigneeIds?.length ? item.assigneeIds : [item.devId, item.pmId],
     status: item.status,
     startedAt: item.startedAt,
     completedAt: item.completedAt,
@@ -344,7 +360,7 @@ function toReview(task: SeedTask, item: SeedReview): Review {
   const raterId = item.direction === "pm_to_dev" ? task.pmId : task.devId
   const rateeId = item.direction === "pm_to_dev" ? task.devId : task.pmId
   return {
-    id: `${task.id}:${item.direction}`,
+    id: `${task.id}:${item.direction}:${raterId}:${rateeId}`,
     taskId: task.id,
     direction: item.direction,
     raterId,

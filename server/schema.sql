@@ -10,9 +10,12 @@ CREATE TABLE IF NOT EXISTS reviews (
   scores JSONB NOT NULL,
   detail TEXT NOT NULL DEFAULT '',
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  UNIQUE (task_id, direction)
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+ALTER TABLE reviews DROP CONSTRAINT IF EXISTS reviews_task_id_direction_key;
+ALTER TABLE reviews DROP CONSTRAINT IF EXISTS reviews_task_id_direction_rater_id_ratee_id_key;
+CREATE UNIQUE INDEX IF NOT EXISTS reviews_slot_unique ON reviews (task_id, direction, rater_id, ratee_id);
 
 CREATE INDEX IF NOT EXISTS reviews_saved_by_email_idx ON reviews (saved_by_email);
 CREATE INDEX IF NOT EXISTS reviews_rater_email_idx ON reviews (rater_email);

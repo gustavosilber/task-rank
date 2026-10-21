@@ -103,18 +103,36 @@ function createdById(task: TwTask): string {
   return value != null && String(value) !== "" ? String(value) : ""
 }
 
-function pickDev(task: TwTask, namedIds: Set<string>): string {
-  // In Teamwork the assigned Dev is the "responsible party" / assignees.
-  const assignees = assigneeIds(task).filter((id) => namedIds.has(id))
-  return assignees[0] ?? ""
+function uniqueIds(ids: string[]): string[] {
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const id of ids) {
+    if (!id || seen.has(id)) continue
+    seen.add(id)
+    out.push(id)
+  }
+  return out
 }
 
-function pickPm(task: TwTask, namedIds: Set<string>, devId: string, defaultPmId: string): string {
+function pickDevAndPmIds(
+  task: TwTask,
+  people: Person[],
+  namedIds: Set<string>,
+  defaultPmId: string,
+): { devIds: string[]; pmIds: string[] } | null {
+  const peopleById = new Map(people.map((person) => [person.id, person]))
+  const assignees = uniqueIds(assigneeIds(task).filter((id) => namedIds.has(id)))
   const createdBy = createdById(task)
-  if (createdBy && namedIds.has(createdBy) && createdBy !== devId) return createdBy
-  if (defaultPmId && namedIds.has(defaultPmId) && defaultPmId !== devId) return defaultPmId
-  if (createdBy && namedIds.has(createdBy)) return createdBy
-  return defaultPmId && namedIds.has(defaultPmId) ? defaultPmId : ""
+  const isPm = (id: string) => peopleById.get(id)?.role === "PM"
+  const pmIds = uniqueIds([...assignees.filter(isPm), ...(createdBy && namedIds.has(createdBy) && isPm(createdBy) ? [createdBy] : [])])
+  let devIds = uniqueIds(assignees.filter((id) => !pmIds.includes(id)))
+  if (devIds.length === 0) devIds = assignees.slice()
+  if (pmIds.length === 0) {
+    if (createdBy && namedIds.has(createdBy)) pmIds.push(createdBy)
+    else if (defaultPmId && namedIds.has(defaultPmId)) pmIds.push(defaultPmId)
+  }
+  if (devIds.length === 0 || pmIds.length === 0) return null
+  return { devIds: uniqueIds(devIds), pmIds: uniqueIds(pmIds) }
 }
 
 function personEmail(person: TwPerson): string {
@@ -220,27 +238,23 @@ export function mapWorkspace(
         toIsoDate(task.updatedAt) ||
         "1970-01-01"
 
-      const devId = pickDev(task, namedIds)
-      if (!devId) {
-        droppedNoDev += 1
-        return null
-      }
-
-      const pmId = pickPm(task, namedIds, devId, defaultPmId)
-      if (!pmId) {
+      const roles = pickDevAndPmIds(task, people, namedIds, defaultPmId)
+      if (!roles) {
         droppedNoDev += 1
         return null
       }
 
       const description = stripHtml(task.description ?? "")
-      const assigneeIdsForTask = assigneeIds(task).filter((id) => namedIds.has(id))
+      const assigneeIdsForTask = uniqueIds(assigneeIds(task).filter((id) => namedIds.has(id)))
       return {
         id: String(task.id),
         title: task.name?.trim() || `Task ${task.id}`,
         summary: description || "No description in Teamwork.",
         projectId,
-        devId,
-        pmId,
+        devId: roles.devIds[0],
+        pmId: roles.pmIds[0],
+        devIds: roles.devIds,
+        pmIds: roles.pmIds,
         assigneeIds: assigneeIdsForTask,
         status: completed ? ("completed" as const) : ("in_progress" as const),
         startedAt,
@@ -250,7 +264,9 @@ export function mapWorkspace(
     .filter((task) => task != null)
     .sort((a, b) => (b.completedAt ?? b.startedAt).localeCompare(a.completedAt ?? a.startedAt))
 
-  const usedPeople = new Set(tasks.flatMap((task) => [task.devId, task.pmId, ...(task.assigneeIds ?? [])]))
+  const usedPeople = new Set(
+    tasks.flatMap((task) => [...(task.devIds ?? [task.devId]), ...(task.pmIds ?? [task.pmId]), ...(task.assigneeIds ?? [])]),
+  )
   const refinedPeople = refineRoles(
     people.filter((person) => usedPeople.has(person.id)),
     tasks,
@@ -279,8 +295,8 @@ export function mapWorkspace(
 }
 
 export function refineRoles(people: Person[], tasks: Task[]): Person[] {
-  const asDev = new Set(tasks.map((task) => task.devId))
-  const asPm = new Set(tasks.map((task) => task.pmId))
+  const asDev = new Set(tasks.flatMap((task) => (task.devIds?.length ? task.devIds : [task.devId])))
+  const asPm = new Set(tasks.flatMap((task) => (task.pmIds?.length ? task.pmIds : [task.pmId])))
   return people.map((person) => {
     const mostlyPm = asPm.has(person.id) && !asDev.has(person.id)
     if (mostlyPm || person.role === "PM") return { ...person, role: mostlyPm ? "PM" : person.role }

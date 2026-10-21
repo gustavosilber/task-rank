@@ -76,3 +76,24 @@ export function PersonButton({ personId, onOpen }: { personId: string; onOpen?: 
     </button>
   )
 }
+
+export function PeopleList({
+  personIds,
+  userId,
+  canImpersonate,
+  onOpen,
+}: {
+  personIds: string[]
+  userId: string
+  canImpersonate: boolean
+  onOpen?: (personId: string) => void
+}) {
+  if (personIds.length === 0) return <span className="muted">—</span>
+  return (
+    <div className="people-inline">
+      {personIds.map((id) => (
+        <PersonButton key={id} personId={id} onOpen={canImpersonate || id === userId ? onOpen : undefined} />
+      ))}
+    </div>
+  )
+}

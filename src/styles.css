@@ -285,9 +285,15 @@ td:nth-child(7) { white-space: nowrap; }
 
 .review-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 16px;
   align-items: start;
+}
+
+.people-inline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
 }
 
 .card { padding: 18px; }
@@ -493,7 +499,8 @@ ul.plain li { padding: 10px 0; border-bottom: 1px solid var(--line); }
   .bar { flex-wrap: wrap; padding: 12px 0; }
   .nav { order: 3; }
   .bar-end { margin-left: 0; }
-  .stats, .metrics, .review-grid { grid-template-columns: 1fr 1fr; }
+  .stats, .metrics { grid-template-columns: 1fr 1fr; }
+  .review-grid { grid-template-columns: 1fr; }
   .bar-row { grid-template-columns: 1fr; gap: 4px; }
 }
 

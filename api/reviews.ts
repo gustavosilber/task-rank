@@ -59,10 +59,12 @@ async function ensureSchema() {
           scores JSONB NOT NULL,
           detail TEXT NOT NULL DEFAULT '',
           created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-          updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-          UNIQUE (task_id, direction)
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
         )
       `
+      await query`ALTER TABLE reviews DROP CONSTRAINT IF EXISTS reviews_task_id_direction_key`
+      await query`ALTER TABLE reviews DROP CONSTRAINT IF EXISTS reviews_task_id_direction_rater_id_ratee_id_key`
+      await query`CREATE UNIQUE INDEX IF NOT EXISTS reviews_slot_unique ON reviews (task_id, direction, rater_id, ratee_id)`
       await query`CREATE INDEX IF NOT EXISTS reviews_saved_by_email_idx ON reviews (saved_by_email)`
       await query`CREATE INDEX IF NOT EXISTS reviews_rater_email_idx ON reviews (rater_email)`
       await query`CREATE INDEX IF NOT EXISTS reviews_ratee_email_idx ON reviews (ratee_email)`
@@ -198,6 +200,7 @@ async function listReviews(user: AuthUser): Promise<Review[]> {
 }
 
 async function upsertReview(user: AuthUser, input: ReviewInput): Promise<Review> {
+  if (input.raterId === input.rateeId) throw new HttpError(400, "You cannot rate yourself.")
   if (!user.isSuperUser && input.raterEmail && input.raterEmail !== user.email) {
     throw new HttpError(403, "You can only save reviews as yourself.")
   }
@@ -221,10 +224,8 @@ async function upsertReview(user: AuthUser, input: ReviewInput): Promise<Review>
       ${createdAt}::timestamptz,
       now()
     )
-    ON CONFLICT (task_id, direction) DO UPDATE SET
+    ON CONFLICT (task_id, direction, rater_id, ratee_id) DO UPDATE SET
       id = EXCLUDED.id,
-      rater_id = EXCLUDED.rater_id,
-      ratee_id = EXCLUDED.ratee_id,
       rater_email = EXCLUDED.rater_email,
       ratee_email = EXCLUDED.ratee_email,
       saved_by_email = EXCLUDED.saved_by_email,

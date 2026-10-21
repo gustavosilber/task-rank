@@ -1,8 +1,7 @@
 import { useState } from "react"
-import { DEV_ASPECTS } from "../aspects"
-import { formatDate, reviewAverage, reviewFor } from "../model"
+import { formatDate, meanOfReviews, personHasUnratedWork, reviewsFor, taskDevIds, taskHasUnratedSlots, taskPmIds } from "../model"
 import type { Review, Task } from "../types"
-import { PersonButton, ProjectMark, ScoreValue, StatusBadge } from "../ui"
+import { PeopleList, ProjectMark, ScoreValue, StatusBadge } from "../ui"
 import { useWorkspace } from "../WorkspaceContext"
 
 type StatusFilter = "all" | "in_progress" | "completed" | "unrated"
@@ -28,13 +27,14 @@ export function TasksView({
   const inProject = tasks.filter((task) => projectId === "all" || task.projectId === projectId)
   const completed = inProject.filter((task) => task.status === "completed")
   const inProgress = inProject.filter((task) => task.status === "in_progress")
-  const unrated = inProject.filter((task) => !reviewFor(reviews, task.id, "pm_to_dev") || !reviewFor(reviews, task.id, "dev_to_pm"))
+  const isUnrated = (task: Task) => (canImpersonate ? taskHasUnratedSlots(task, reviews) : personHasUnratedWork(task, userId, reviews))
+  const unrated = inProject.filter(isUnrated)
 
   const visible = inProject
     .filter((task) => {
       if (status === "in_progress") return task.status === "in_progress"
       if (status === "completed") return task.status === "completed"
-      if (status === "unrated") return !reviewFor(reviews, task.id, "pm_to_dev") || !reviewFor(reviews, task.id, "dev_to_pm")
+      if (status === "unrated") return isUnrated(task)
       return true
     })
     .sort(compareTasks)
@@ -47,9 +47,9 @@ export function TasksView({
           ? "Syncing your Teamwork tasks…"
           : workspace.source === "teamwork"
             ? canImpersonate
-              ? `${tasks.length} tasks synced from Teamwork. Satisfaction is the PM review of who did the work.`
-              : `Your ${tasks.length} tasks (assigned, Dev, or PM). Ratings are saved in the app.`
-            : `${tasks.length} tasks across ${projects.length} projects in one list. Satisfaction is the PM review of who did the work.`}
+              ? `${tasks.length} tasks synced from Teamwork. Satisfaction is the average of every PM → Dev review on the task.`
+              : `Your ${tasks.length} assigned tasks. Each Dev and PM on a task can rate the others.`
+            : `${tasks.length} tasks across ${projects.length} projects in one list. Satisfaction is the average of every PM → Dev review on the task.`}
       </p>
 
       <div className="stats">
@@ -95,8 +95,8 @@ export function TasksView({
             <tr>
               <th>Task</th>
               <th>Project</th>
-              <th>Dev</th>
-              <th>PM</th>
+              <th>Devs</th>
+              <th>PMs</th>
               <th>Status</th>
               <th>Closed</th>
               <th>Satisfaction</th>
@@ -104,8 +104,7 @@ export function TasksView({
           </thead>
           <tbody>
             {visible.map((task) => {
-              const pmReview = reviewFor(reviews, task.id, "pm_to_dev")
-              const score = pmReview ? reviewAverage(pmReview, DEV_ASPECTS) : null
+              const score = meanOfReviews(reviewsFor(reviews, task.id, "pm_to_dev"))
               return (
                 <tr key={task.id}>
                   <td>
@@ -117,16 +116,10 @@ export function TasksView({
                     <ProjectMark projectId={task.projectId} />
                   </td>
                   <td>
-                    <PersonButton
-                      personId={task.devId}
-                      onOpen={canImpersonate || task.devId === userId ? onOpenPerson : undefined}
-                    />
+                    <PeopleList personIds={taskDevIds(task)} userId={userId} canImpersonate={canImpersonate} onOpen={onOpenPerson} />
                   </td>
                   <td>
-                    <PersonButton
-                      personId={task.pmId}
-                      onOpen={canImpersonate || task.pmId === userId ? onOpenPerson : undefined}
-                    />
+                    <PeopleList personIds={taskPmIds(task)} userId={userId} canImpersonate={canImpersonate} onOpen={onOpenPerson} />
                   </td>
                   <td>
                     <StatusBadge status={task.status} />
