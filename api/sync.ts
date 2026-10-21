@@ -314,7 +314,21 @@ async function fetchAllPages(path: string, keys: string[], pageSize = 250) {
   return { items, includedPeople, includedProjects }
 }
 
+function uniqueById<T extends { id: string }>(items: T[]): T[] {
+  const seen = new Set<string>()
+  const out: T[] = []
+  for (const item of items) {
+    if (!item.id || seen.has(item.id)) continue
+    seen.add(item.id)
+    out.push(item)
+  }
+  return out
+}
+
 async function persistSnapshot(people: Person[], projects: Project[], tasks: Task[]) {
+  people = uniqueById(people)
+  projects = uniqueById(projects)
+  tasks = uniqueById(tasks)
   const query = sql() as ReturnType<typeof sql> & { query: (text: string, params?: unknown[]) => Promise<unknown> }
   if (people.length > 0) {
     await query.query(
