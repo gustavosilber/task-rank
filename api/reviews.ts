@@ -119,7 +119,16 @@ type ReviewRow = {
   ratee_id: string
   scores: Scores | string
   detail: string
-  created_at: string
+  created_at: string | Date
+}
+
+function toIsoDate(value: string | Date): string {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) return value.toISOString().slice(0, 10)
+  const match = String(value).match(/\d{4}-\d{2}-\d{2}/)
+  if (match) return match[0]
+  const parsed = new Date(value)
+  if (!Number.isNaN(parsed.getTime())) return parsed.toISOString().slice(0, 10)
+  return new Date().toISOString().slice(0, 10)
 }
 
 type ReviewInput = Review & { raterEmail?: string; rateeEmail?: string }
@@ -134,7 +143,7 @@ function toReview(row: ReviewRow): Review {
     rateeId: row.ratee_id,
     scores: isScores(scores) ? scores : {},
     detail: row.detail ?? "",
-    createdAt: String(row.created_at).slice(0, 10),
+    createdAt: toIsoDate(row.created_at),
   }
 }
 
