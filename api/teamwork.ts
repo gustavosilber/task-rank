@@ -1,3 +1,5 @@
+import type { VercelRequest, VercelResponse } from "@vercel/node"
+
 export type TeamworkProxyRequest = {
   method: string
   pathname: string
@@ -22,6 +24,10 @@ function jsonBuffer(status: number, payload: unknown): TeamworkProxyResponse {
     contentType: "application/json",
     body: Buffer.from(JSON.stringify(payload)),
   }
+}
+
+function headerValue(value: string | string[] | undefined): string {
+  return typeof value === "string" ? value : ""
 }
 
 export async function proxyTeamwork(request: TeamworkProxyRequest): Promise<TeamworkProxyResponse> {
@@ -68,4 +74,47 @@ export async function proxyTeamwork(request: TeamworkProxyRequest): Promise<Team
       error: error instanceof Error ? error.message : "Could not reach Teamwork.",
     })
   }
+}
+
+function resolveTarget(req: VercelRequest): { pathname: string; search: string } {
+  const url = new URL(req.url || "/api/teamwork", "https://task-rank.vercel.app")
+  const twPath = headerValue(typeof req.query.tw_path === "string" ? req.query.tw_path : undefined) || headerValue(url.searchParams.get("tw_path") || "")
+  url.searchParams.delete("tw_path")
+  if (twPath) {
+    return { pathname: twPath.startsWith("/") ? twPath : `/${twPath}`, search: url.search }
+  }
+  const forwarded = headerValue(req.headers["x-forwarded-uri"])
+  if (forwarded.includes("/api/teamwork/")) {
+    const original = new URL(forwarded, "https://task-rank.vercel.app")
+    return { pathname: original.pathname, search: original.search }
+  }
+  return { pathname: url.pathname, search: url.search }
+}
+
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+  const { pathname, search } = resolveTarget(req)
+  const rawBody =
+    req.method === "GET" || req.method === "HEAD"
+      ? undefined
+      : typeof req.body === "string" || Buffer.isBuffer(req.body)
+        ? req.body
+        : req.body == null
+          ? undefined
+          : JSON.stringify(req.body)
+
+  const result = await proxyTeamwork({
+    method: req.method ?? "GET",
+    pathname,
+    search,
+    site: headerValue(req.headers["x-teamwork-site"]),
+    token: headerValue(req.headers["x-teamwork-token"]),
+    user: headerValue(req.headers["x-teamwork-user"]),
+    password: headerValue(req.headers["x-teamwork-password"]),
+    contentType: headerValue(req.headers["content-type"]),
+    body: rawBody,
+  })
+
+  res.status(result.status)
+  res.setHeader("Content-Type", result.contentType)
+  res.send(result.body)
 }

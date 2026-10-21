@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http"
 import { loadEnv, type Plugin } from "vite"
-import { handleReviewsRequest } from "./api/_lib/reviews"
+import { handleReviewsRequest } from "./api/reviews"
 
 function readBody(req: IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {

@@ -45,7 +45,10 @@ async function request<T>(connection: TeamworkConnection, path: string, init?: R
   assertCredentials(connection)
   const site = normalizeSite(connection.siteUrl)
   const target = path.startsWith("/") ? path : `/${path}`
-  const response = await fetch(`/api/teamwork${target}`, {
+  const tw = new URL(target, "https://teamwork.local")
+  const qs = new URLSearchParams(tw.search)
+  qs.set("tw_path", tw.pathname)
+  const response = await fetch(`/api/teamwork?${qs.toString()}`, {
     ...init,
     headers: {
       Accept: "application/json",

@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http"
 import type { Plugin } from "vite"
-import { proxyTeamwork } from "./api/_lib/teamwork-proxy"
+import { proxyTeamwork } from "./api/teamwork"
 
 function readBody(req: IncomingMessage): Promise<Buffer> {
   return new Promise((resolve, reject) => {
@@ -23,9 +23,11 @@ export function teamworkProxyPlugin(): Plugin {
         if (!req.url?.startsWith("/api/teamwork")) return next()
         const incoming = new URL(req.url, "http://localhost")
         const method = req.method ?? "GET"
+        const twPath = incoming.searchParams.get("tw_path") || incoming.pathname
+        incoming.searchParams.delete("tw_path")
         const result = await proxyTeamwork({
           method,
-          pathname: incoming.pathname,
+          pathname: twPath,
           search: incoming.search,
           site: headerValue(req.headers["x-teamwork-site"]),
           token: headerValue(req.headers["x-teamwork-token"]),
