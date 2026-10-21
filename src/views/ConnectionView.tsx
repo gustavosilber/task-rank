@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react"
 import { TeamworkError, testConnection } from "../teamwork/client"
 import { DEFAULT_TEAMWORK_SITE } from "../teamwork/config"
-import { syncTeamworkWorkspace } from "../teamwork/sync"
+import { fetchWorkspaceSnapshot, triggerTeamworkSync } from "../teamwork/snapshot"
 import type { TeamworkAuthMode, TeamworkConnection } from "../teamwork/types"
 import { useWorkspace } from "../WorkspaceContext"
 import { formatDate, iso } from "../model"
@@ -80,15 +80,18 @@ export function ConnectionView() {
     setMessage(null)
     try {
       persist(draft)
-      const result = await syncTeamworkWorkspace(draft, session)
+      const credential = session?.googleCredential
+      if (!credential) throw new Error("Sign in with Google to run the shared Teamwork sync.")
+      const result = await triggerTeamworkSync(credential, draft.defaultPmId)
+      const snapshot = await fetchWorkspaceSnapshot(credential)
       applyTeamworkWorkspace(
         {
-          people: result.people,
-          projects: result.projects,
-          tasks: result.tasks,
-          syncedAt: new Date().toISOString(),
+          people: snapshot.people,
+          projects: snapshot.projects,
+          tasks: snapshot.tasks,
+          syncedAt: snapshot.syncedAt ?? result.syncedAt ?? new Date().toISOString(),
         },
-        result.session,
+        session,
       )
       setMessage(result.message)
     } catch (err) {
@@ -104,8 +107,9 @@ export function ConnectionView() {
     <section>
       <h1>Teamwork</h1>
       <p className="lede">
-        Google is only for signing in. Teamwork is read-only and uses one shared API key for every user. Ratings stay in
-        Task Rank. <code>dev@bestworlddsweb.com</code> sees everyone; other people only see their own tasks.
+        Google is only for signing in. Teamwork is read-only. Tasks are copied into Task Rank once a day so logins do not
+        hit Teamwork. Ratings stay in the app. <code>dev@bestworlddsweb.com</code> sees everyone; other people only see
+        their own tasks.
       </p>
 
       {session?.isSuperUser ? (
@@ -183,10 +187,11 @@ export function ConnectionView() {
             <button type="button" className="ghost" disabled={busy !== "idle" || !canSubmit} onClick={onTest}>
               {busy === "test" ? "Testing…" : "Test connection"}
             </button>
-            <button type="button" className="primary" disabled={busy !== "idle" || !canSubmit} onClick={onSync}>
-              {busy === "sync" ? "Syncing…" : "Sync tasks"}
+            <button type="button" className="primary" disabled={busy !== "idle" || !session?.googleCredential} onClick={onSync}>
+              {busy === "sync" ? "Syncing…" : "Sync now"}
             </button>
           </div>
+          <em className="hint">Automatic sync runs once a day. Sync now is for admins and still uses one shared crawl.</em>
 
           {message && <p className="saved">{message}</p>}
           {(error || syncError) && <p className="error-line">{error || syncError}</p>}
@@ -194,11 +199,11 @@ export function ConnectionView() {
       ) : (
         <div className="card connection-card">
           <p className="lede">
-            {connected
-              ? "Teamwork is already connected with the shared API key. You do not need to enter credentials."
-              : "Teamwork is not connected yet. Ask an admin to paste the API key once."}
+            {workspace.syncedAt
+              ? "Tasks come from the shared Teamwork snapshot. Automatic sync runs once a day. You do not need credentials."
+              : "The shared Teamwork snapshot is not ready yet. Ask an admin to run Sync now."}
           </p>
-          {syncing && <p className="saved">Syncing tasks from Teamwork…</p>}
+          {syncing && <p className="saved">Loading the shared Teamwork snapshot…</p>}
           {syncError && <p className="error-line">{syncError}</p>}
         </div>
       )}
@@ -225,7 +230,7 @@ export function ConnectionView() {
           <dd>{workspace.syncedAt ? formatDate(iso(new Date(workspace.syncedAt))) : "—"}</dd>
         </div>
         <div>
-          <dt>Tasks in memory</dt>
+          <dt>Tasks in snapshot</dt>
           <dd>{workspace.tasks.length}</dd>
         </div>
       </div>

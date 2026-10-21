@@ -220,7 +220,7 @@ function AppShell() {
         {syncError && <p className="error-line">{syncError}</p>}
         {ratingsError && <p className="error-line">{ratingsError}</p>}
         {syncing && workspace.tasks.length === 0 && (
-          <p className="lede">Syncing active tasks from Teamwork. This can take a moment.</p>
+          <p className="lede">Loading the shared Teamwork snapshot. This can take a moment.</p>
         )}
         {route.name === "tasks" && (
           <TasksView

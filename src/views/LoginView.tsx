@@ -39,7 +39,7 @@ export function LoginView() {
         <p className="login-brand">Task Rank</p>
         <h1>Sign in with Google</h1>
         <p className="lede">
-          Sign in with Google. Task Rank then syncs Teamwork automatically and opens your tasks.
+          Sign in with Google. Task Rank opens your tasks from the shared Teamwork snapshot.
         </p>
 
         {clientId ? (

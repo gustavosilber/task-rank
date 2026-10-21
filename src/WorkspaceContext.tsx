@@ -23,8 +23,7 @@ import { signOutGoogle } from "./auth/google"
 import { fetchReviews, upsertReviews } from "./reviews/client"
 import type { Person, Project, Review, Task } from "./types"
 import type { TeamworkConnection, TeamworkSession } from "./teamwork/types"
-import { isUsableConnection } from "./teamwork/config"
-import { syncTeamworkWorkspace } from "./teamwork/sync"
+import { fetchWorkspaceSnapshot } from "./teamwork/snapshot"
 
 type WorkspaceContextValue = {
   workspace: Workspace
@@ -239,42 +238,49 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!session || session.email === "demo@taskrank.local") return
-    if (!isUsableConnection(connection)) return
-    const key = `${session.email}:${connection.siteUrl}:${connection.apiKey || connection.email}`
+    const credential = session.googleCredential
+    if (!credential) return
+    const key = `${session.email}:snapshot`
     if (autoSyncedFor.current === key) return
     autoSyncedFor.current = key
 
     let cancelled = false
     setSyncing(true)
     setSyncError(null)
-    syncTeamworkWorkspace(connection, session)
-      .then((result) => {
+    fetchWorkspaceSnapshot(credential)
+      .then((snapshot) => {
         if (cancelled) return
-        const syncedAt = new Date().toISOString()
-        const sess = result.session
-          ? bindSessionToPeople(
-              { ...session, ...result.session, googleCredential: session.googleCredential },
-              result.people,
-            )
-          : session
-        const people = ensureSessionPerson(result.people, sess)
-        const next: Workspace = { source: "teamwork", people, projects: result.projects, tasks: result.tasks, syncedAt }
+        const people = ensureSessionPerson(snapshot.people, session)
+        const sess = bindSessionToPeople(session, people)
+        const next: Workspace = {
+          source: "teamwork",
+          people,
+          projects: snapshot.projects,
+          tasks: snapshot.tasks,
+          syncedAt: snapshot.syncedAt,
+        }
         setWorkspace(next)
         saveWorkspace(next)
-        saveConnection(connection)
-        if (sess) {
-          setSessionState(sess)
-          saveSession(sess)
-          if (!sess.isSuperUser) {
-            setUserIdState(sess.personId)
-            saveUserId(sess.personId)
-          }
+        setSessionState(sess)
+        saveSession(sess)
+        if (!sess.isSuperUser) {
+          setUserIdState(sess.personId)
+          saveUserId(sess.personId)
+        }
+        if (!snapshot.syncedAt && snapshot.tasks.length === 0) {
+          setSyncError(
+            sess.isSuperUser
+              ? "No shared Teamwork snapshot yet. Run Sync on this page. Automatic sync runs once a day."
+              : "No shared Teamwork snapshot yet. An admin can run Sync; automatic sync runs once a day.",
+          )
+        } else if (snapshot.lastStatus === "error" && snapshot.lastError) {
+          setSyncError(snapshot.lastError)
         }
       })
       .catch((error) => {
         if (!cancelled) {
           autoSyncedFor.current = ""
-          setSyncError(error instanceof Error ? error.message : "Could not sync Teamwork.")
+          setSyncError(error instanceof Error ? error.message : "Could not load the Teamwork snapshot.")
         }
       })
       .finally(() => {
@@ -284,7 +290,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true
     }
-  }, [connection, session])
+  }, [session])
 
   useEffect(() => {
     if (workspace.source !== "teamwork") {

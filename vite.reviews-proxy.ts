@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http"
 import { loadEnv, type Plugin } from "vite"
 import { handleReviewsRequest } from "./api/reviews"
+import { handleSyncRequest, handleWorkspaceRequest } from "./api/sync"
 
 function readBody(req: IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -13,11 +14,19 @@ function readBody(req: IncomingMessage): Promise<string> {
 
 function applyEnv(mode: string, envDir: string) {
   const env = loadEnv(mode, envDir, "")
-  if (env.DATABASE_URL && !process.env.DATABASE_URL) process.env.DATABASE_URL = env.DATABASE_URL
-  if (env.POSTGRES_URL && !process.env.POSTGRES_URL) process.env.POSTGRES_URL = env.POSTGRES_URL
-  if (env.GOOGLE_CLIENT_ID && !process.env.GOOGLE_CLIENT_ID) process.env.GOOGLE_CLIENT_ID = env.GOOGLE_CLIENT_ID
-  if (env.VITE_GOOGLE_CLIENT_ID && !process.env.VITE_GOOGLE_CLIENT_ID) {
-    process.env.VITE_GOOGLE_CLIENT_ID = env.VITE_GOOGLE_CLIENT_ID
+  const keys = [
+    "DATABASE_URL",
+    "POSTGRES_URL",
+    "GOOGLE_CLIENT_ID",
+    "VITE_GOOGLE_CLIENT_ID",
+    "TEAMWORK_SITE_URL",
+    "VITE_TEAMWORK_SITE_URL",
+    "TEAMWORK_API_KEY",
+    "VITE_TEAMWORK_API_KEY",
+    "CRON_SECRET",
+  ]
+  for (const key of keys) {
+    if (env[key] && !process.env[key]) process.env[key] = env[key]
   }
 }
 
@@ -30,13 +39,19 @@ export function reviewsProxyPlugin(): Plugin {
     configureServer(server) {
       applyEnv(server.config.mode, server.config.envDir)
       server.middlewares.use(async (req, res: ServerResponse, next) => {
-        const url = req.url ?? ""
-        if (!url.startsWith("/api/reviews")) return next()
-        const result = await handleReviewsRequest({
-          method: req.method ?? "GET",
-          authorization: typeof req.headers.authorization === "string" ? req.headers.authorization : "",
-          body: (req.method ?? "GET") === "GET" || (req.method ?? "") === "HEAD" ? "" : await readBody(req),
-        })
+        const url = (req.url ?? "").split("?")[0]
+        const authorization = typeof req.headers.authorization === "string" ? req.headers.authorization : ""
+        const method = req.method ?? "GET"
+        const body = method === "GET" || method === "HEAD" ? "" : await readBody(req)
+        let result: { status: number; body: unknown } | null = null
+        if (url === "/api/reviews") {
+          result = await handleReviewsRequest({ method, authorization, body })
+        } else if (url === "/api/workspace") {
+          result = await handleWorkspaceRequest({ method, authorization, cron: false, body: "" })
+        } else if (url === "/api/sync") {
+          result = await handleSyncRequest({ method, authorization, cron: false, body })
+        }
+        if (!result) return next()
         res.statusCode = result.status
         res.setHeader("Content-Type", "application/json")
         res.end(JSON.stringify(result.body))

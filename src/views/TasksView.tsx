@@ -46,7 +46,7 @@ export function TasksView({
       <h1>Tasks</h1>
       <p className="lede">
         {syncing && tasks.length === 0
-          ? "Syncing your Teamwork tasks…"
+          ? "Loading your Teamwork tasks…"
           : workspace.source === "teamwork"
             ? canImpersonate
               ? `${tasks.length} tasks synced from Teamwork. Satisfaction is the average of every PM → Dev review on the task.`
@@ -136,7 +136,7 @@ export function TasksView({
         {visible.length === 0 && (
           <p className="empty-row">
             {syncing
-              ? "Syncing from Teamwork…"
+              ? "Loading the Teamwork snapshot…"
               : workspace.source === "teamwork"
                 ? "No tasks match this filter. Try syncing again in Teamwork."
                 : "No tasks match this filter."}
