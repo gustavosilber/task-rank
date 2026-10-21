@@ -292,10 +292,29 @@ export async function handleWorkspaceRequest(request: WorkspaceRequest): Promise
   }
 }
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
-  const result = await handleWorkspaceRequest({
-    method: req.method ?? "GET",
-    authorization: String(req.headers.authorization ?? ""),
-  })
-  res.status(result.status).json(result.body)
+function headerOf(req: VercelRequest | Request, name: string): string {
+  if (typeof Headers !== "undefined" && req.headers instanceof Headers) return req.headers.get(name) ?? ""
+  const value = (req as VercelRequest).headers[name]
+  return typeof value === "string" ? value : Array.isArray(value) ? value[0] ?? "" : ""
+}
+
+export default async function handler(req: VercelRequest | Request, res?: VercelResponse) {
+  try {
+    const result = await handleWorkspaceRequest({
+      method: req.method ?? "GET",
+      authorization: headerOf(req, "authorization"),
+    })
+    if (res && typeof res.status === "function") {
+      res.status(result.status).json(result.body)
+      return
+    }
+    return Response.json(result.body, { status: result.status })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Could not load the Teamwork snapshot."
+    if (res && typeof res.status === "function") {
+      res.status(500).json({ error: message })
+      return
+    }
+    return Response.json({ error: message }, { status: 500 })
+  }
 }

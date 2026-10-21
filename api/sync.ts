@@ -807,13 +807,41 @@ export async function handleSyncRequest(request: ApiRequest): Promise<ApiRespons
   }
 }
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
-  const body = typeof req.body === "string" ? req.body : req.body == null ? "" : JSON.stringify(req.body)
-  const result = await handleSyncRequest({
-    method: req.method ?? "GET",
-    authorization: String(req.headers.authorization ?? ""),
-    cron: String(req.headers["x-vercel-cron"] ?? "") === "1",
-    body,
-  })
-  res.status(result.status).json(result.body)
+function isWebRequest(req: VercelRequest | Request): req is Request {
+  return typeof Headers !== "undefined" && req.headers instanceof Headers
+}
+
+function headerOf(req: VercelRequest | Request, name: string): string {
+  if (isWebRequest(req)) return req.headers.get(name) ?? ""
+  const value = req.headers[name]
+  return typeof value === "string" ? value : Array.isArray(value) ? value[0] ?? "" : ""
+}
+
+async function readBody(req: VercelRequest | Request): Promise<string> {
+  if (isWebRequest(req)) return req.text()
+  const body = req.body
+  return typeof body === "string" ? body : body == null ? "" : JSON.stringify(body)
+}
+
+export default async function handler(req: VercelRequest | Request, res?: VercelResponse) {
+  try {
+    const result = await handleSyncRequest({
+      method: req.method ?? "GET",
+      authorization: headerOf(req, "authorization"),
+      cron: headerOf(req, "x-vercel-cron") === "1",
+      body: req.method === "GET" || req.method === "HEAD" ? "" : await readBody(req),
+    })
+    if (res && typeof res.status === "function") {
+      res.status(result.status).json(result.body)
+      return
+    }
+    return Response.json(result.body, { status: result.status })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Could not sync Teamwork."
+    if (res && typeof res.status === "function") {
+      res.status(500).json({ error: message })
+      return
+    }
+    return Response.json({ error: message }, { status: 500 })
+  }
 }
